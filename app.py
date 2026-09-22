@@ -16,7 +16,7 @@ VAULT_ADDR = os.environ["VAULT_ADDR"]
 VAULT_TOKEN = os.environ["VAULT_TOKEN"]
 S3_BUCKET = os.environ["SNAPSHOT_S3_BUCKET"]
 S3_PREFIX = os.environ.get("SNAPSHOT_S3_PREFIX", "vault-backup")
-BACKUP_DIR = Path(os.environ.get("SNAPSHOT_BACKUP_DIR", "/opt/vault-new/backup"))
+BACKUP_DIR = Path(os.environ.get("SNAPSHOT_BACKUP_DIR", "/tmp/vault/backup"))
 FILENAME_PREFIX = os.environ.get("SNAPSHOT_FILENAME_PREFIX", "vault-snapshot")
 
 
