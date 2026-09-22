@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import requests
 
 import boto3
 import hvac
@@ -105,6 +106,34 @@ def cleanup(days: int = typer.Option(7, "--days")):
 
     console.print(f"[green]Removed {len(to_delete)} backup(s) older than {days} days[/green]")
 
+@app.command()
+def force_restore(name: str = typer.Option(..., "--name")):
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    local_path = BACKUP_DIR / name
+
+    try:
+        s3 = boto3.client("s3")
+        s3.download_file(S3_BUCKET, f"{S3_PREFIX}/{name}", str(local_path))
+    except ClientError as e:
+        console.print(f"[red]Backup not found or download failed:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    console.print(f"[yellow]Force restoring from {name} — this bypasses seal validation[/yellow]")
+
+    try:
+        with open(local_path, "rb") as f:
+            response = requests.post(
+                f"{VAULT_ADDR}/v1/sys/storage/raft/snapshot-force",
+                headers={"X-Vault-Token": VAULT_TOKEN},
+                data=f,
+                timeout=300,
+            )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        console.print(f"[red]Force restore failed:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    console.print(f"[green]Force restore complete from {name}[/green]")
 
 @app.command()
 def restore(name: str = typer.Option(..., "--name")):
@@ -123,6 +152,7 @@ def restore(name: str = typer.Option(..., "--name")):
     try:
         with open(local_path, "rb") as f:
             client.sys.restore_raft_snapshot(f)
+            client.sys.restore_raft_snapshot(f)
     except hvac.exceptions.VaultError as e:
         console.print(f"[red]Restore failed:[/red] {e}")
         raise typer.Exit(code=1)
@@ -132,3 +162,4 @@ def restore(name: str = typer.Option(..., "--name")):
 
 if __name__ == "__main__":
     app()
+
