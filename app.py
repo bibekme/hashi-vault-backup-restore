@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import boto3
@@ -16,7 +16,7 @@ VAULT_ADDR = os.environ["VAULT_ADDR"]
 VAULT_TOKEN = os.environ["VAULT_TOKEN"]
 S3_BUCKET = os.environ["SNAPSHOT_S3_BUCKET"]
 S3_PREFIX = os.environ.get("SNAPSHOT_S3_PREFIX", "vault-backup")
-BACKUP_DIR = Path(os.environ.get("SNAPSHOT_BACKUP_DIR", "/tmp/vault-new/backup"))
+BACKUP_DIR = Path(os.environ.get("SNAPSHOT_BACKUP_DIR", "/opt/vault-new/backup"))
 FILENAME_PREFIX = os.environ.get("SNAPSHOT_FILENAME_PREFIX", "vault-snapshot")
 
 
@@ -82,6 +82,31 @@ def list():
 
 
 @app.command()
+def cleanup(days: int = typer.Option(7, "--days")):
+    s3 = boto3.client("s3")
+
+    try:
+        response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=f"{S3_PREFIX}/")
+    except (ClientError, NoCredentialsError) as e:
+        console.print(f"[red]Could not list bucket:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    objects = response.get("Contents", [])
+    to_delete = [obj for obj in objects if obj["LastModified"] < cutoff]
+
+    if not to_delete:
+        console.print("Nothing to clean up")
+        return
+
+    for obj in to_delete:
+        s3.delete_object(Bucket=S3_BUCKET, Key=obj["Key"])
+        console.print(f"Deleted {obj['Key']}")
+
+    console.print(f"[green]Removed {len(to_delete)} backup(s) older than {days} days[/green]")
+
+
+@app.command()
 def restore(name: str = typer.Option(..., "--name")):
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     local_path = BACKUP_DIR / name
@@ -107,4 +132,3 @@ def restore(name: str = typer.Option(..., "--name")):
 
 if __name__ == "__main__":
     app()
-
