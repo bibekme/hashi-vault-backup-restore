@@ -152,7 +152,6 @@ def restore(name: str = typer.Option(..., "--name")):
     try:
         with open(local_path, "rb") as f:
             client.sys.restore_raft_snapshot(f)
-            client.sys.restore_raft_snapshot(f)
     except hvac.exceptions.VaultError as e:
         console.print(f"[red]Restore failed:[/red] {e}")
         raise typer.Exit(code=1)
